@@ -133,6 +133,7 @@ make_undo_smgr_create(RelFileNode *rnode, TransactionId xid,
 {
 	UnpackedUndoRecord undorecord = {0};
 
+	elog(LOG, "make_undo_smgr_create()");
 	undorecord.uur_rmid = RM_SMGR_ID;
 	undorecord.uur_type = UNDO_SMGR_CREATE;
 	undorecord.uur_info = UREC_INFO_RELATION_DETAILS | UREC_INFO_PAYLOAD;

@@ -109,8 +109,9 @@ dump_undo_records(PG_FUNCTION_ARGS)
 				RmgrTable[record->uur_rmid].rm_undo_desc(&buffer, record);
 			else
 				appendStringInfoString(&buffer, "<no undo desc function>");
-			elog(NOTICE, UndoRecPtrFormat ": %s: %s",
+			elog(NOTICE, UndoRecPtrFormat ": txid %u, %s: %s",
 				 record_ptr,
+				 record->uur_xid,
 				 RmgrTable[record->uur_rmid].rm_name,
 				 buffer.data);
 			if (BufferIsValid(record->uur_buffer))

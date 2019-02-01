@@ -545,7 +545,7 @@ RollbackFromHT(Oid dbid)
 	RollbackHashEntry *rh;
 	HASH_SEQ_STATUS status;
 	int i = 0;
-
+	elog(LOG, "RollbackFromHT");
 	/* Fetch the rollback requests */
 	LWLockAcquire(RollbackHTLock, LW_SHARED);
 

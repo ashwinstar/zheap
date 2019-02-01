@@ -68,7 +68,9 @@ UndoDiscardOneLog(UndoLogControl *log, TransactionId xmin, bool *hibernate)
 	{
 		bool pending_abort = false;
 
-		next_insert = UndoLogGetNextInsertPtr(log->logno, xid);
+		next_insert = UndoLogGetNextInsertPtr(log->logno, InvalidTransactionId);
+
+		elog(LOG, "undo_recptr = %lu, next_insert = %lu", undo_recptr, next_insert);
 
 		/*
 		 * If the next insert location in the undo log is same as the oldest
@@ -82,7 +84,10 @@ UndoDiscardOneLog(UndoLogControl *log, TransactionId xmin, bool *hibernate)
 			 * there is nothing to discard.
 			 */
 			if (undo_recptr == log->oldest_data)
+			{
+				elog(LOG, "break because oldest");
 				break;
+			}
 			else
 				log_complete = true;
 		}
@@ -99,6 +104,7 @@ UndoDiscardOneLog(UndoLogControl *log, TransactionId xmin, bool *hibernate)
 				TransactionIdPrecedes(uur->uur_xid, xmin) &&
 				uur->uur_progress == 0)
 			{
+				elog(LOG, "xid %u is aborted!", uur->uur_xid);
 				/*
 				 * At the time of recovery, we might not have a valid next undo
 				 * record pointer and in that case we'll calculate the location
@@ -150,11 +156,20 @@ UndoDiscardOneLog(UndoLogControl *log, TransactionId xmin, bool *hibernate)
 					pending_abort = true;
 			}
 
-			next_urecptr = uur->uur_next;
+
+			/*
+			 * Most transaction headers have a pointer to the next transaction
+			 * in this log, but the last transaction has an invalid next
+			 * pointer (it will be set by the next transaction).  In that case
+			 * we can use the insert pointer we observed earlier.
+			 */
+			if (UndoRecPtrIsValid(uur->uur_next))
+				next_urecptr = uur->uur_next;
+			else
+				next_urecptr = next_insert;
 
 			/* If staying in the same undo log, we must be going forwards. */
-			Assert(!UndoRecPtrIsValid(next_urecptr) ||
-				   UndoRecPtrGetLogNo(next_urecptr) != UndoRecPtrGetLogNo(undo_recptr) ||
+			Assert(UndoRecPtrGetLogNo(next_urecptr) != UndoRecPtrGetLogNo(undo_recptr) ||
 				   next_urecptr > undo_recptr);
 
 			undoxid = uur->uur_xid;
@@ -182,18 +197,6 @@ UndoDiscardOneLog(UndoLogControl *log, TransactionId xmin, bool *hibernate)
 			 */
 			if (TransactionIdPrecedes(undoxid, xmin) && !pending_abort)
 			{
-				UndoRecPtr	next_insert = InvalidUndoRecPtr;
-
-				/*
-				 * Get the last insert location for this transaction Id, if it
-				 * returns invalid pointer that means there is new transaction
-				 * has started for this undolog.  So we need to refetch the undo
-				 * and continue the process.
-				 */
-				next_insert = UndoLogGetNextInsertPtr(log->logno, undoxid);
-				if (!UndoRecPtrIsValid(next_insert))
-					continue;
-
 				undo_recptr = next_insert;
 				need_discard = true;
 				latest_discardxid = undoxid;

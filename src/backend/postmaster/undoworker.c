@@ -638,6 +638,7 @@ UndoWorkerMain(Datum main_arg)
 	int		worker_slot = DatumGetInt32(main_arg);
 	Oid		dbid;
 
+	elog(LOG, "UndoWorkerMain");
 	dbid = slot_get_dbid(worker_slot);
 
 	/* Setup signal handling */

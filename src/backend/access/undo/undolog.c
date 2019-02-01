@@ -1064,7 +1064,7 @@ UndoLogDiscard(UndoRecPtr discard_point, TransactionId xid)
 		elog(ERROR, "cannot move discard point past insert point");
 	old_discard = log->meta.discard;
 	if (discard < old_discard)
-		elog(ERROR, "cannot move discard pointer backwards");
+		elog(ERROR, "cannot move discard pointer backwards (%lu -> %lu)", old_discard, discard);
 	end = log->meta.end;
 	/* Are we discarding the last remaining data in a log marked as full? */
 	if (log->meta.status == UNDO_LOG_STATUS_FULL &&
@@ -1258,8 +1258,11 @@ UndoLogGetNextInsertPtr(UndoLogNumber logno, TransactionId xid)
 	logxid = log->meta.unlogged.xid;
 	LWLockRelease(&log->mutex);
 
-	if (TransactionIdIsValid(logxid) && !TransactionIdEquals(logxid, xid))
+	if (TransactionIdIsValid(xid) && !TransactionIdEquals(logxid, xid))
+	{
+		elog(LOG, "UndoLogGetNextInsertPtr %u != %u", xid, logxid);
 		return InvalidUndoRecPtr;
+	}
 
 	return MakeUndoRecPtr(logno, insert);
 }
@@ -1402,6 +1405,7 @@ CheckPointUndoLogs(XLogRecPtr checkPointRedo, XLogRecPtr priorCheckPointRedo)
 	serialized_size = sizeof(UndoLogMetaData) * UndoLogNumSlots();
 	serialized = (UndoLogMetaData *) palloc0(serialized_size);
 
+	elog(LOG, "CheckPointUndoLogs");
 	/* Scan through all slots looking for non-empty ones. */
 	num_logs = 0;
 	for (i = 0; i < UndoLogNumSlots(); ++i)
@@ -1412,6 +1416,7 @@ CheckPointUndoLogs(XLogRecPtr checkPointRedo, XLogRecPtr priorCheckPointRedo)
 		if (slot->logno == InvalidUndoLogNumber)
 			continue;
 
+		elog(LOG, "CheckPointUndoLogs slot = %d", i);
 		/* Capture snapshot while holding each mutex. */
 		LWLockAcquire(&slot->mutex, LW_EXCLUSIVE);
 		serialized[num_logs++] = slot->meta;
